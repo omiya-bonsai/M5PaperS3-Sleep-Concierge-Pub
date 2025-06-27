@@ -21,7 +21,7 @@
 // システム全体の信頼性を確保します。
 //
 // --- プロジェクトの構成ファイル ---
-// 1. M5PaperS3_QuadrantMonitor_JP.ino (このファイル)
+// 1. M5PaperS3_MqttEnvMonitor.ino (このファイル)
 //    - プログラム全体の流れを制御する、最も中心的なファイル。
 //      setup()とloop()関数のみを記述し、高い可読性を維持します。
 //
@@ -37,7 +37,7 @@
 // ===============================================================
 
 
-// --- ライブラリと設定ファイルの読み込み ---
+// --- 1. ライブラリと設定ファイルの読み込み ---
 #include <M5Unified.h>     // M5Stack製品を統合的に扱うための必須ライブラリ
 #include <WiFi.h>          // Wi-Fi機能を利用するためのライブラリ
 #include <PubSubClient.h>  // MQTT通信機能を利用するためのライブラリ
@@ -45,7 +45,7 @@
 #include "config.h"        // Wi-FiやMQTTの個人設定を記述したファイルを読み込む
 
 
-// --- グローバル変数の定義 ---
+// --- 2. グローバル変数の定義 ---
 // これらの変数は、このプロジェクト内の複数のファイル (helpers.hなど) から
 // 参照されるため、グローバルスコープで定義されています。
 
@@ -61,14 +61,14 @@ bool data_updated = false;              // 新しいデータを受信したか�
 unsigned long last_indoor_update = 0;   // 室内データを最後に受信した時刻
 unsigned long last_outdoor_update = 0;  // 屋外データを最後に受信した時刻
 
-// --- オブジェクトのインスタンス化 ---
+// --- 3. オブジェクトのインスタンス化 ---
 // 各ライブラリの機能を使うためのオブジェクトを作成します。
 WiFiClient espClient;             // Wi-Fi通信の基盤となるクライアント
 PubSubClient client(espClient);   // MQTT通信を行うためのクライアント
 LGFX_Sprite canvas(&M5.Display);  // M5PaperS3の画面に描画するためのバッファ(キャンバス)
 
 
-// --- ヘルパー関数の読み込み ---
+// --- 4. ヘルパー関数の読み込み ---
 // 描画やネットワークなどの具体的な処理は、このファイルに集約されています。
 #include "helpers.h"
 
@@ -117,21 +117,34 @@ void setup() {
 void loop() {
   M5.update();  // ボタン入力など、M5Stackデバイスの状態を常に更新
 
-  // MQTTブローカーとの接続状態を確認し、もし切断されていれば再接続を試みる
+  // MQTTブローカーとの接続を維持
   if (!client.connected()) {
     reconnect();
-    data_updated = true;  // 再接続後は、最新のステータスを表示するため画面を強制更新
+    data_updated = true;  // 再接続後、すぐに画面を更新
   }
-  client.loop();  // MQTTのメッセージ受信などを処理
+  client.loop();  // MQTTのメッセージを処理
 
-  // 定期的な画面更新
-  static unsigned long last_refresh = 0;
-  // データが更新された、または最後の更新から5分以上経過した場合に画面を再描画
-  if (data_updated || (millis() - last_refresh > 300000)) {
-    Serial.println("Data updated or periodic refresh. Redrawing screen...");
-    drawScreen();             // 画面描画のメイン処理 (詳細はhelpers.h)
-    data_updated = false;     // 更新フラグをリセット
-    last_refresh = millis();  // 最終更新時刻を記録
+  // --- E-Inkディスプレイの長寿命化と画面更新の管理 ---
+  static unsigned long last_data_refresh = 0;
+  static unsigned long last_full_refresh = 0;
+
+  // 条件1: 新しいデータを受信した、または最後の更新から5分以上経過した場合
+  //        -> 通常の画面更新（部分更新）を実行
+  if (data_updated || (millis() - last_data_refresh > 300000)) {  // 300000ミリ秒 = 5分
+    Serial.println("Partial refresh: Data updated or 5-minute interval.");
+    drawScreen();                  // 画面描画のメイン処理 (詳細はhelpers.h)
+    data_updated = false;          // 更新フラグをリセット
+    last_data_refresh = millis();  // 最終データ更新時刻を記録
+  }
+
+  // 条件2: 最後のフルリフレッシュから1時間以上経過した場合
+  //        -> 画面全体のフルリフレッシュを実行し、E-Inkのゴーストを防止
+  if (millis() - last_full_refresh > 3600000) {  // 3600000ミリ秒 = 1時間
+    Serial.println("Full refresh: Preventing screen ghosting.");
+    M5.Display.clear();                     // 画面を一度リセット
+    drawScreen();                           // 全体を再描画
+    last_full_refresh = millis();           // 最終フルリフレッシュ時刻を記録
+    last_data_refresh = last_full_refresh;  // データ更新時刻も同期させる
   }
 
   delay(100);  // CPU負荷を軽減し、システムを安定させるための短い待機時間

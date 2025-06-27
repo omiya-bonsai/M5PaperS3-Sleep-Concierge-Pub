@@ -1,11 +1,14 @@
 #pragma once
 
 // ===============================================================
-// このファイルには、描画、ネットワーク、季節判定などの
-// 補助的な関数がすべて含まれています。
+// ヘルパー関数ファイル (helpers.h)
 // ===============================================================
+//
+// このファイルには、画面描画、ネットワーク接続、季節判定など、
+// メインスケッチの処理を補助する具体的な関数がすべて含まれています。
+//
 
-// 外部グローバル変数の参照宣言
+// --- 外部グローバル変数の参照宣言 ---
 extern LGFX_Sprite canvas;
 extern WiFiClient espClient;
 extern PubSubClient client;
@@ -22,8 +25,29 @@ extern const char *indoor_topic, *outdoor_topic;
 // Section: 描画関連関数
 // ===============================================================
 
-// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 修正点 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-// カレンダーの描画サイズとフォントを拡大
+/**
+ * @brief 指定された値に基づき、htop風のステータスゲージを描画します。
+ */
+void drawGauge(int x, int y, int w, int h, float value, float min_val, float max_val, const char* label) {
+  canvas.setFont(&fonts::lgfxJapanGothic_20);
+  canvas.setTextDatum(ML_DATUM);
+  canvas.drawString(label, x, y + h / 2);
+
+  int gauge_x = x + 70;
+  int gauge_w = w - 140;
+  canvas.drawRect(gauge_x, y, gauge_w, h, DARKGREY);
+
+  float percentage = (value - min_val) / (max_val - min_val);
+  if (percentage < 0) percentage = 0;
+  if (percentage > 1) percentage = 1;
+
+  int bar_w = percentage * (gauge_w - 4);
+  canvas.fillRect(gauge_x + 2, y + 2, bar_w, h - 4, BLACK);
+
+  canvas.setTextDatum(MR_DATUM);
+  canvas.drawString(String(value, 0), x + w - 5, y + h / 2);
+}
+
 /**
  * @brief 月間カレンダーを描画します。
  */
@@ -31,7 +55,7 @@ void drawCalendar(int tx, int ty, int year, int month, int day) {
   const char* week_days[] = { "日", "月", "火", "水", "木", "金", "土" };
   int days_in_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
   if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
-    days_in_month[1] = 29;  // うるう年
+    days_in_month[1] = 29;
   }
 
   struct tm timeinfo_first = { 0 };
@@ -41,39 +65,42 @@ void drawCalendar(int tx, int ty, int year, int month, int day) {
   mktime(&timeinfo_first);
   int first_day_of_week = timeinfo_first.tm_wday;
 
-  const int cell_width = 50;   // セルの幅を拡大
-  const int cell_height = 45;  // セルの高さを拡大
+  const int cell_width = 60;
+  const int cell_height = 55;
+  const int header_height = 50;
+  const int week_header_height = 45;
 
-  // カレンダーのヘッダーを描画
-  canvas.setFont(&fonts::lgfxJapanGothic_32);
+  canvas.setFont(&fonts::lgfxJapanGothic_36);
   canvas.setTextDatum(TC_DATUM);
   canvas.drawString(String(year) + "年 " + String(month) + "月", tx + (cell_width * 7) / 2, ty);
 
-  ty += 50;
-  canvas.setFont(&fonts::lgfxJapanGothic_24);
+  ty += header_height;
+  canvas.setFont(&fonts::lgfxJapanGothic_28);
   for (int i = 0; i < 7; i++) {
+    if (i == 0) canvas.setTextColor(RED);
     canvas.drawString(week_days[i], tx + i * cell_width + cell_width / 2, ty);
+    canvas.setTextColor(BLACK);
   }
 
-  // 日付を描画
-  ty += 45;
+  ty += week_header_height;
   int current_day = 1;
   for (int row = 0; row < 6; row++) {
     for (int col = 0; col < 7; col++) {
       if ((row == 0 && col < first_day_of_week) || current_day > days_in_month[month - 1]) {
-        // 月の範囲外の日付は描画しない
+        // Do nothing
       } else {
         int day_x = tx + col * cell_width + cell_width / 2;
         int day_y = ty + row * cell_height + cell_height / 2;
 
-        // 今日の日付をハイライト
         if (current_day == day) {
-          canvas.fillRect(day_x - (cell_width / 2), day_y - (cell_height / 2), cell_width - 2, cell_height - 2, BLACK);
+          canvas.fillCircle(day_x, day_y, 25, BLACK);
           canvas.setTextColor(WHITE);
           canvas.drawString(String(current_day), day_x, day_y);
           canvas.setTextColor(BLACK);
         } else {
+          if (col == 0) canvas.setTextColor(RED);
           canvas.drawString(String(current_day), day_x, day_y);
+          if (col == 0) canvas.setTextColor(BLACK);
         }
         current_day++;
       }
@@ -81,6 +108,7 @@ void drawCalendar(int tx, int ty, int year, int month, int day) {
   }
 }
 
+// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 最終修正点 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 /**
  * @brief 現在の日付から二十四節気を判定し、季節のメッセージを生成します。
  */
@@ -102,9 +130,10 @@ void getSeasonalInfo(int current_month, int current_day, String& seasonal_title,
     }
   }
   if (most_recent_event.month == current_month && most_recent_event.day == current_day) {
-    seasonal_title = "今日は「" + String(most_recent_event.name) + "」";
+    seasonal_title = "今日は「" + String(most_recent_event.name) + "」です";
   } else {
-    seasonal_title = "直近の節目: " + String(most_recent_event.name);
+    seasonal_title = "直近の節目: " + String(most_recent_event.name)
+                     + " (" + String(most_recent_event.month) + "/" + String(most_recent_event.day) + ")";
   }
   seasonal_phrase = most_recent_event.phrase;
 }
@@ -122,16 +151,16 @@ void drawScreen() {
   canvas.fillSprite(WHITE);
   canvas.setTextColor(BLACK);
 
-  const int H_MARGIN = 50;
-  const int V_MARGIN = 40;
+  const int H_MARGIN = 40;
+  const int V_MARGIN = 35;
   int current_y = V_MARGIN;
 
   // Block 1: Indoor Environment
   canvas.setTextDatum(TL_DATUM);
-  canvas.setFont(&fonts::lgfxJapanGothic_32);
+  canvas.setFont(&fonts::lgfxJapanGothic_28);
   canvas.drawString("室内環境", H_MARGIN, current_y);
 
-  current_y += 45;
+  current_y += 40;
   canvas.setFont(&fonts::lgfxJapanGothic_40);
   canvas.setTextDatum(TL_DATUM);
   canvas.drawString(String(indoor_temp, 1) + "℃", H_MARGIN, current_y);
@@ -141,9 +170,9 @@ void drawScreen() {
   canvas.drawString(String(indoor_co2) + "ppm", M5.Display.width() - H_MARGIN, current_y);
 
   // Block 2: Sleep Advice
-  current_y += 90;
+  current_y += 85;
   canvas.setTextDatum(TL_DATUM);
-  canvas.setFont(&fonts::lgfxJapanGothic_32);
+  canvas.setFont(&fonts::lgfxJapanGothic_28);
   canvas.drawString("快眠アドバイス", H_MARGIN, current_y);
 
   String mode = "---", setting = "---";
@@ -190,7 +219,7 @@ void drawScreen() {
       }
     }
   }
-  current_y += 45;
+  current_y += 40;
   canvas.setFont(&fonts::lgfxJapanGothic_40);
   canvas.drawString(mode, H_MARGIN, current_y);
   current_y += 55;
@@ -200,37 +229,41 @@ void drawScreen() {
   current_y += 45;
   canvas.drawFastHLine(H_MARGIN, current_y, M5.Display.width() - (H_MARGIN * 2), LIGHTGREY);
 
-  // Block 3: Calendar & Seasonal Information
+  // Block 3: Calendar
   current_y += 30;
-  int calendar_x = (M5.Display.width() - (50 * 7)) / 2;
+  int calendar_x = (M5.Display.width() - (60 * 7)) / 2;
   drawCalendar(calendar_x, current_y, timeinfo.tm_year + 1900, month, timeinfo.tm_mday);
 
-  current_y += 370;  // カレンダーの高さ分を確保
+  // Block 4: Seasonal Information
+  current_y += 430;
   String seasonal_title, seasonal_phrase;
   getSeasonalInfo(month, timeinfo.tm_mday, seasonal_title, seasonal_phrase);
-  canvas.setTextDatum(TC_DATUM);
-  canvas.setFont(&fonts::lgfxJapanGothic_24);
-  canvas.drawString(seasonal_title + " | " + seasonal_phrase, M5.Display.width() / 2, current_y);
 
-  // Block 4: System Status (Footer)
+  canvas.setTextDatum(TC_DATUM);
+  canvas.setFont(&fonts::lgfxJapanGothic_28);
+  canvas.drawString(seasonal_title, M5.Display.width() / 2, current_y);
+  current_y += 40;
+  canvas.setFont(&fonts::lgfxJapanGothic_24);
+  canvas.drawString(seasonal_phrase, M5.Display.width() / 2, current_y);
+
+  // Block 5: System Status (Footer)
   const int footer_y = M5.Display.height() - 65;
   canvas.drawFastHLine(0, footer_y - 15, M5.Display.width(), LIGHTGREY);
 
   canvas.setFont(&fonts::lgfxJapanGothic_24);
-  canvas.setTextDatum(TC_DATUM);
-  String line1_text = "BAT: " + String(M5.Power.getBatteryLevel()) + "%"
-                      + "    |    "
-                      + (client.connected() ? "MQTT: 接続中" : "MQTT: 切断");
-  canvas.drawString(line1_text, M5.Display.width() / 2, footer_y);
 
-  String line2_text = "室内: " + String((millis() - last_indoor_update < 600000) ? "OK" : "NG")
-                      + "    |    "
-                      + "屋外: " + String((millis() - last_outdoor_update < 600000) ? "OK" : "NG");
-  canvas.drawString(line2_text, M5.Display.width() / 2, footer_y + 35);
-  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 最終レイアウト修正 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+  canvas.setTextDatum(TC_DATUM);
+  canvas.drawString("BAT: " + String(M5.Power.getBatteryLevel()) + "%", M5.Display.width() / 4, footer_y);
+  canvas.drawString(client.connected() ? "MQTT: 接続中" : "MQTT: 切断", M5.Display.width() * 3 / 4, footer_y);
+
+  canvas.drawString("室内: " + String((millis() - last_indoor_update < 600000) ? "OK" : "NG"), M5.Display.width() / 4, footer_y + 35);
+  canvas.drawString("屋外: " + String((millis() - last_outdoor_update < 600000) ? "OK" : "NG"), M5.Display.width() * 3 / 4, footer_y + 35);
+
+  canvas.drawFastVLine(M5.Display.width() / 2, footer_y - 5, 55, DARKGREY);
 
   canvas.pushSprite(0, 0);
 }
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 最終レイアウト修正 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 
 // ===============================================================
