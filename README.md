@@ -1,6 +1,5 @@
 # 快眠環境コンシェルジュ for M5PaperS3
 
-![プロジェクトのイメージ画像](https://storage.googleapis.com/gemini-prod/images/03b9b456-e63d-4c3e-8c81-5464c8d52ca5)
 
 ## 1. プロジェクト概要
 
@@ -22,7 +21,7 @@ MQTTプロトコルを通じてリアルタイムで室内外の環境データ�
 
 このプロジェクトは、責務を明確にするため、以下の3つのファイルに分割されています。
 
-1.  **`M5PaperS3_QuadrantMonitor_JP.ino`**:
+1.  **`M5PaperS3_MqttEnvMonitor.ino`**:
     * プログラム全体の流れを制御する、中心的なメインスケッチです。
     * `setup()`と`loop()`関数のみを記述し、高い可読性を維持しています。
 
@@ -58,13 +57,13 @@ MQTTプロトコルを通じてリアルタイムで室内外の環境データ�
     * Arduino IDEのライブラリマネージャを開き、上記の3つのライブラリを検索してインストールします。
 
 2.  **ファイルの配置**:
-    * `M5PaperS3_QuadrantMonitor_JP.ino`、`config.h`、`helpers.h`の3つのファイルを、同じフォルダ内に保存します。
+    * `M5PaperS3_MqttEnvMonitor.ino`、`config.h`、`helpers.h`の3つのファイルを、同じフォルダ内に保存します。
 
 3.  **個人設定の編集**:
     * `config.h`ファイルを開き、あなたの環境に合わせて`ssid`、`password`、`mqtt_server`などの情報を編集します。
 
 4.  **書き込み**:
-    * Arduino IDEで`M5PaperS3_QuadrantMonitor_JP.ino`を開き、ボード設定を「M5PaperS3」にして、スケッチをデバイスに書き込みます。
+    * Arduino IDEで`M5PaperS3_MqttEnvMonitor.ino`を開き、ボード設定を「M5PaperS3」にして、スケッチをデバイスに書き込みます。
 
 ## 6. 今後の展望
 
